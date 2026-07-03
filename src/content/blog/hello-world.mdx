@@ -1,0 +1,43 @@
+---
+title: "Hello, world"
+date: "2026-06-20"
+summary: "Why I finally built a portfolio, and what I plan to write about here."
+tags: ["meta", "writing"]
+---
+
+I've put off building a personal site for years. Every time I sat down to do it,
+I'd get lost picking a framework instead of writing anything. So this time I kept
+it deliberately small: a home page, a place for **projects**, and a place for
+**writing**. That's it.
+
+## What to expect
+
+I mostly work on backend systems and developer tooling, so expect posts about:
+
+- TypeScript patterns that actually pay off
+- Database design and the trade-offs I keep relearning
+- Small tools I build to remove friction from my day
+
+## A quick taste
+
+Here's the kind of thing I find worth writing down — a tiny helper I reach for
+constantly:
+
+```ts
+export function groupBy<T, K extends PropertyKey>(
+  items: readonly T[],
+  key: (item: T) => K,
+): Record<K, T[]> {
+  return items.reduce((acc, item) => {
+    const k = key(item);
+    (acc[k] ??= []).push(item);
+    return acc;
+  }, {} as Record<K, T[]>);
+}
+```
+
+Nothing fancy — but the `??=` there saves an `if` check every single time.
+
+> Good writing about code is mostly about deleting the parts that don't matter.
+
+More soon.
