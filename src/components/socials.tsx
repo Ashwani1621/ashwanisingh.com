@@ -26,6 +26,7 @@ export function Socials({ className }: { className?: string }) {
             variant="ghost"
             size="icon"
             aria-label={social.title}
+            nativeButton={false}
             render={
               <a
                 href={social.href}
