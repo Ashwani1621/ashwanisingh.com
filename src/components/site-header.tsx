@@ -21,12 +21,7 @@ export function SiteHeader() {
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
       <Container className="flex h-14 items-center justify-between gap-4">
         <Link href="/" aria-label="Home">
-          <Image
-            src={icon}
-            alt={siteConfig.name}
-            className="size-8 rounded-lg"
-            priority
-          />
+          <Image src={icon} alt={siteConfig.name} className="size-8 rounded-lg" />
         </Link>
 
         <nav className="flex items-center gap-1">
