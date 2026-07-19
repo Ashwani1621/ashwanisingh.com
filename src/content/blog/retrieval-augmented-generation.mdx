@@ -1,0 +1,328 @@
+---
+title: "RAG: Retrieval Augmented Generation, and Why It Still Gets Things Wrong"
+date: "2026-07-19"
+summary: "A beginner-friendly look at how RAG works, where it helps, and the practical reasons it fails — retrieval misses, bad chunking, context limits, and hallucinations."
+tags: ["ai", "llm", "rag"]
+---
+
+Ask a large language model about your company's refund policy and it will
+answer — fluently, confidently, and quite possibly wrong. Not because the model
+is bad, but because it has never seen your refund policy. It's answering from
+patterns it learned during training, which is a polite way of saying it's
+guessing.
+
+This post is about the most popular fix for that problem: **Retrieval Augmented
+Generation**, or RAG. We'll cover what it is, how a basic pipeline works, where
+it shines — and, just as importantly, the ways it fails in practice. No code,
+just concepts.
+
+## The problem: an LLM without external knowledge
+
+An LLM's knowledge has two hard limits:
+
+- **It's frozen in time.** Training ends on some date; anything that happened
+  after that simply isn't in the model. Your pricing change from last week
+  doesn't exist as far as it's concerned.
+- **It only knows public data.** Your internal wiki, support tickets, contracts,
+  and product docs were never part of training. The model can't know them.
+
+The dangerous part is that the model doesn't *feel* these limits. When asked
+something outside its knowledge, it doesn't say "I have no idea" — it produces
+the most plausible-sounding answer it can. Plausible and correct are not the
+same thing.
+
+## What RAG is and why it was introduced
+
+RAG's idea is simple: **before the model answers, go fetch the relevant
+information and hand it over along with the question.**
+
+The classic analogy is an exam. An LLM on its own is taking a closed-book exam
+from memory. RAG turns it into an open-book exam: the model still does the
+reading and writing, but the facts come from a book you put in front of it. The
+model's job shifts from *remembering* the answer to *reading and summarizing*
+it.
+
+This was introduced because the alternative — retraining or fine-tuning a model
+every time your data changes — is slow, expensive, and impractical for
+fast-moving knowledge. Updating a document index is cheap. Updating a model is
+not.
+
+## How a basic RAG pipeline works
+
+There are two phases. First, an **indexing** phase that happens ahead of time:
+your documents are split into small pieces called *chunks*, each chunk is
+converted into an embedding (a list of numbers capturing its meaning), and the
+embeddings are stored in a vector store.
+
+Then, at question time:
+
+1. The user's question is converted into an embedding the same way.
+2. The vector store returns the chunks whose embeddings are most similar to the
+   question — the "top-k" matches.
+3. Those chunks are pasted into the prompt alongside the question.
+4. The LLM writes an answer grounded in what it was given.
+
+<svg viewBox="0 0 640 250" role="img" aria-label="Diagram of a basic RAG pipeline: a user query goes to a retriever, which searches a vector store of documents and passes the top matching chunks to the LLM, which produces the response." className="my-8 w-full" style={{ height: "auto" }}>
+  <title>Basic RAG architecture</title>
+  <defs>
+    <marker id="rag-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
+    </marker>
+  </defs>
+  <g stroke="currentColor" strokeWidth="1.2" fill="none">
+    <rect x="8" y="58" width="104" height="44" rx="6" />
+    <rect x="180" y="58" width="120" height="44" rx="6" />
+    <rect x="368" y="58" width="96" height="44" rx="6" />
+    <rect x="532" y="58" width="100" height="44" rx="6" />
+    <rect x="180" y="170" width="120" height="56" rx="6" />
+    <line x1="112" y1="80" x2="172" y2="80" markerEnd="url(#rag-arrow)" />
+    <line x1="300" y1="80" x2="360" y2="80" markerEnd="url(#rag-arrow)" />
+    <line x1="464" y1="80" x2="524" y2="80" markerEnd="url(#rag-arrow)" />
+    <line x1="226" y1="102" x2="226" y2="164" markerEnd="url(#rag-arrow)" />
+    <line x1="254" y1="170" x2="254" y2="108" markerEnd="url(#rag-arrow)" />
+  </g>
+  <g fill="currentColor" fontSize="13" textAnchor="middle">
+    <text x="60" y="84">User query</text>
+    <text x="240" y="84">Retriever</text>
+    <text x="416" y="84">LLM</text>
+    <text x="582" y="84">Response</text>
+    <text x="240" y="192">Vector store</text>
+    <text x="240" y="210" fontSize="11" opacity="0.6">(your documents)</text>
+  </g>
+  <g fill="currentColor" fontSize="11" opacity="0.65">
+    <text x="330" y="66" textAnchor="middle">top-k chunks</text>
+    <text x="218" y="140" textAnchor="end">search</text>
+    <text x="262" y="140" textAnchor="start">matches</text>
+  </g>
+</svg>
+
+That's the whole trick. Everything else in a RAG system — chunk sizes,
+embedding models, reranking — is tuning around these four steps.
+
+## Where RAG works well
+
+RAG is a great fit when the answer *exists, written down, somewhere*:
+
+- **Internal documentation Q&A.** "What's our VPN setup process?" The answer
+  lives on a wiki page; RAG finds it and rephrases it.
+- **Customer support over a help center.** Support articles are exactly the
+  kind of small, self-contained documents retrieval handles well.
+- **Fast-changing information.** Prices, policies, release notes — update the
+  index and the system immediately answers from the new version, no retraining.
+- **Answers with citations.** Because you know which chunks were retrieved, you
+  can show sources, and users can verify the answer themselves.
+
+The common thread: a clear question with a factual answer that sits in one or
+two places in your documents.
+
+## Why RAG sometimes gives incorrect answers
+
+Here's the part that surprises people: RAG *improves* answers, but it does not
+*guarantee* them. It's a pipeline, and every stage can fail quietly. The model
+at the end will still produce a fluent answer — built on whatever the earlier
+stages handed it.
+
+### Poor retrieval and missing context
+
+Retrieval is a similarity search, not an understanding search. It returns
+chunks whose wording and meaning *look like* the question — which is usually,
+but not always, where the answer is. If the relevant chunk is phrased very
+differently from the question, or the question uses internal jargon the
+documents don't, the right chunk may never make the top-k. The model then
+answers from irrelevant material, and it does so with full confidence.
+
+<svg viewBox="0 0 640 300" role="img" aria-label="Comparison of good and poor retrieval: with good retrieval the relevant refund chunk is found and the answer is grounded; with poor retrieval only irrelevant chunks are found and the model guesses." className="my-8 w-full" style={{ height: "auto" }}>
+  <title>Good retrieval vs poor retrieval</title>
+  <defs>
+    <marker id="ret-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
+    </marker>
+  </defs>
+  <line x1="320" y1="14" x2="320" y2="290" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
+  <g fill="currentColor" fontSize="13" fontWeight="600" textAnchor="middle">
+    <text x="158" y="22">Good retrieval</text>
+    <text x="482" y="22">Poor retrieval</text>
+  </g>
+  <g stroke="currentColor" strokeWidth="1.2" fill="none">
+    <rect x="28" y="36" width="260" height="34" rx="6" />
+    <rect x="352" y="36" width="260" height="34" rx="6" />
+    <line x1="158" y1="70" x2="158" y2="92" markerEnd="url(#ret-arrow)" />
+    <line x1="482" y1="70" x2="482" y2="92" markerEnd="url(#ret-arrow)" />
+    <rect x="28" y="98" width="260" height="26" rx="4" />
+    <rect x="28" y="130" width="260" height="26" rx="4" opacity="0.45" />
+    <rect x="28" y="162" width="260" height="26" rx="4" opacity="0.45" />
+    <rect x="352" y="98" width="260" height="26" rx="4" opacity="0.45" />
+    <rect x="352" y="130" width="260" height="26" rx="4" opacity="0.45" />
+    <rect x="352" y="162" width="260" height="26" rx="4" opacity="0.45" />
+    <line x1="158" y1="188" x2="158" y2="210" markerEnd="url(#ret-arrow)" />
+    <line x1="482" y1="188" x2="482" y2="210" markerEnd="url(#ret-arrow)" />
+    <rect x="28" y="216" width="260" height="56" rx="6" />
+    <rect x="352" y="216" width="260" height="56" rx="6" />
+  </g>
+  <g fill="currentColor" fontSize="12" textAnchor="middle">
+    <text x="158" y="57">“What is the refund window?”</text>
+    <text x="482" y="57">“What is the refund window?”</text>
+    <text x="158" y="115">✓ Refunds accepted within 30 days</text>
+    <text x="158" y="147" opacity="0.55">Return shipping is free</text>
+    <text x="158" y="179" opacity="0.55">Refund FAQ overview</text>
+    <text x="482" y="115" opacity="0.55">✕ Shipping takes 5–7 business days</text>
+    <text x="482" y="147" opacity="0.55">✕ Our brand story</text>
+    <text x="482" y="179" opacity="0.55">✕ Holiday gift guide</text>
+    <text x="158" y="239">“30 days.”</text>
+    <text x="158" y="258" fontSize="11" opacity="0.6">grounded in the source</text>
+    <text x="482" y="239">“14 days.”</text>
+    <text x="482" y="258" fontSize="11" opacity="0.6">a confident guess — the answer never arrived</text>
+  </g>
+</svg>
+
+Notice that both sides *look* identical from the outside: a question goes in, a
+crisp answer comes out. The failure is invisible unless you inspect what was
+retrieved.
+
+### Poor chunking and its impact
+
+Chunking sounds like a boring preprocessing detail, and it quietly determines
+answer quality. Documents are split mechanically — every N characters, or by
+paragraph — and a mechanical split doesn't know that a rule and its exception
+belong together. If a policy sentence gets cut in half, retrieval might fetch
+the half that matches the question and leave the half that changes the answer
+behind.
+
+<svg viewBox="0 0 640 258" role="img" aria-label="Chunking comparison: good chunking keeps a refund rule and its exception in one chunk; poor chunking splits them, so the retrieved chunk is missing the exception about final-sale items." className="my-8 w-full" style={{ height: "auto" }}>
+  <title>Good chunking vs poor chunking</title>
+  <defs>
+    <marker id="chk-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="currentColor" />
+    </marker>
+  </defs>
+  <text x="12" y="20" fill="currentColor" fontSize="11" opacity="0.65">Source document</text>
+  <g stroke="currentColor" strokeWidth="1.2" fill="none">
+    <rect x="8" y="28" width="624" height="38" rx="6" />
+    <line x1="160" y1="66" x2="160" y2="94" markerEnd="url(#chk-arrow)" />
+    <line x1="480" y1="66" x2="480" y2="94" markerEnd="url(#chk-arrow)" />
+    <rect x="8" y="126" width="304" height="58" rx="6" />
+    <rect x="332" y="126" width="300" height="26" rx="6" />
+    <rect x="332" y="160" width="300" height="26" rx="6" opacity="0.45" />
+  </g>
+  <text x="320" y="52" fill="currentColor" fontSize="12.5" textAnchor="middle">Refunds are accepted within 30 days, except for items marked final sale.</text>
+  <g fill="currentColor" fontSize="13" fontWeight="600" textAnchor="middle">
+    <text x="160" y="116">Good chunking</text>
+    <text x="480" y="116">Poor chunking</text>
+  </g>
+  <g fill="currentColor" fontSize="11.5" textAnchor="middle">
+    <text x="160" y="150">Refunds are accepted within 30 days,</text>
+    <text x="160" y="167">except for items marked final sale.</text>
+    <text x="482" y="143">Chunk A: Refunds accepted within 30 days,</text>
+    <text x="482" y="177" opacity="0.55">Chunk B: except for items marked final sale.</text>
+  </g>
+  <g fill="currentColor" fontSize="11.5" textAnchor="middle">
+    <text x="160" y="212">✓ One chunk, full rule retrieved</text>
+    <text x="480" y="212">✕ Only Chunk A retrieved — the exception is lost,</text>
+    <text x="480" y="229">so the model promises refunds on final-sale items</text>
+  </g>
+</svg>
+
+Chunks that are too small lose surrounding context; chunks that are too large
+dilute the embedding so the search gets fuzzy and each retrieved chunk drags in
+mostly-irrelevant text. There's no universal right size — it depends on how
+your documents are written — which is why chunking strategy is one of the first
+things to revisit when a RAG system underperforms.
+
+### Context window limitations
+
+The model's context window — the total amount of text it can read at once — is
+finite. Your retrieved chunks compete for that space with the system prompt,
+the conversation history, and the question itself. You can't just retrieve
+everything and let the model sort it out. And even within the window, models
+pay less attention to material buried in the middle of a long prompt than to
+what's at the beginning or end.
+
+<svg viewBox="0 0 640 190" role="img" aria-label="Illustration of a fixed-size context window filled with a system prompt and four chunks, while the relevant chunk sits outside the window because it did not fit." className="my-8 w-full" style={{ height: "auto" }}>
+  <title>Context window limitation</title>
+  <text x="8" y="26" fill="currentColor" fontSize="11" opacity="0.65">Context window (fixed size)</text>
+  <g stroke="currentColor" fill="none">
+    <rect x="8" y="36" width="480" height="84" rx="8" strokeWidth="1.5" />
+    <rect x="20" y="54" width="90" height="48" rx="4" strokeWidth="1" opacity="0.7" />
+    <rect x="118" y="54" width="86" height="48" rx="4" strokeWidth="1" opacity="0.7" />
+    <rect x="212" y="54" width="86" height="48" rx="4" strokeWidth="1" opacity="0.7" />
+    <rect x="306" y="54" width="86" height="48" rx="4" strokeWidth="1" opacity="0.7" />
+    <rect x="400" y="54" width="76" height="48" rx="4" strokeWidth="1" opacity="0.7" />
+    <rect x="516" y="54" width="116" height="48" rx="4" strokeWidth="1.2" strokeDasharray="5 4" opacity="0.6" />
+  </g>
+  <g fill="currentColor" fontSize="11" textAnchor="middle">
+    <text x="65" y="74">System</text>
+    <text x="65" y="89">prompt</text>
+    <text x="161" y="82">Chunk 1</text>
+    <text x="255" y="82">Chunk 2</text>
+    <text x="349" y="82">Chunk 3</text>
+    <text x="438" y="82">Chunk 4</text>
+    <text x="574" y="74" opacity="0.7">Relevant chunk</text>
+    <text x="574" y="89" opacity="0.7">(ranked 5th)</text>
+  </g>
+  <text x="502" y="83" fill="currentColor" fontSize="15" textAnchor="middle">✕</text>
+  <text x="320" y="160" fill="currentColor" fontSize="12" textAnchor="middle" opacity="0.7">The chunk with the actual answer was ranked 5th — it never reached the model.</text>
+</svg>
+
+This creates an awkward trade-off: retrieve too few chunks and you risk missing
+the answer; retrieve too many and you crowd the window, raise costs, and bury
+the signal in noise.
+
+### Hallucinations, even with RAG
+
+Grounding reduces hallucination; it doesn't eliminate it. Even with perfect
+chunks in the prompt, the model can:
+
+- **Ignore the context** and answer from its training memory anyway, especially
+  when the retrieved text contradicts something it "believes."
+- **Blend sources** — merging two chunks about different products into one
+  answer that describes neither.
+- **Over-extrapolate** — the context says the 2024 policy, the user asks about
+  2026, and the model helpfully fills the gap with fiction.
+
+RAG changes what the model reads, not how it behaves. It remains a text
+generator that will produce *something* — which is why serious systems add
+citations, "answer only from the context" instructions, and human review for
+high-stakes answers.
+
+### Keeping the knowledge base up to date
+
+A RAG system is only as current as its index. When a policy doc changes, the
+old chunks keep getting retrieved — old embeddings don't expire on their own —
+and the system confidently serves last quarter's truth. In practice this means
+ongoing work that has nothing to do with AI: re-ingestion pipelines when
+documents change, deleting chunks for removed pages, and deciding what to do
+when two documents disagree. Teams often treat indexing as a one-time setup
+step; it's actually operations.
+
+## When RAG is not the right solution
+
+RAG assumes the answer is *written down somewhere and findable by similarity*.
+When that assumption breaks, so does RAG:
+
+- **Reasoning and math.** "What's 15% of our Q3 revenue?" isn't sitting in a
+  chunk waiting to be retrieved — it needs calculation, which retrieval can't
+  do.
+- **Whole-corpus questions.** "Summarize the main themes across all 500
+  reports" needs to read everything; retrieving the top 5 chunks is the
+  opposite of that.
+- **Changing behavior, not knowledge.** If you want a specific tone, format, or
+  domain-specific style, that's what fine-tuning is for. RAG feeds facts in; it
+  doesn't reshape how the model writes.
+- **Tiny knowledge bases.** If all your docs fit comfortably in the context
+  window, skip the pipeline and paste them in. RAG is a workaround for *too
+  much* knowledge, and it adds failure modes you don't need for a 10-page FAQ.
+
+## Wrapping up
+
+RAG earns its popularity: it's the cheapest way to make an LLM answer from
+knowledge it was never trained on, it keeps answers current without
+retraining, and it enables citations. For factual Q&A over your own documents,
+it should be your default.
+
+But it's a pipeline, not a guarantee. Retrieval can miss, chunking can sever a
+rule from its exception, the context window can squeeze out the one chunk that
+mattered, the model can still hallucinate, and a stale index will serve stale
+truth with total confidence. If you take one thing from this post: when a RAG
+system gives a wrong answer, look at *what was retrieved* before blaming the
+model — most of the time, the failure happened before the LLM ever started
+writing.
