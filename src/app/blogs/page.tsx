@@ -15,10 +15,7 @@ export default function BlogsPage() {
 
   return (
     <div>
-      <PageHeader
-        title="Blogs"
-        description="Notes on software, tooling, and the craft of building things."
-      />
+      <PageHeader title="Blogs" />
 
       {posts.length === 0 ? (
         <p className="text-muted-foreground">No posts yet. Check back soon.</p>

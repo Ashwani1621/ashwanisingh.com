@@ -23,7 +23,6 @@ export default function HomePage() {
         <p className="mt-4 text-lg text-muted-foreground">
           {siteConfig.tagline}
         </p>
-        <p className="mt-4 leading-7 text-foreground/90">{siteConfig.bio}</p>
         <Socials className="mt-6 -ml-2" />
       </section>
 

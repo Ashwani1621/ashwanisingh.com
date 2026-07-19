@@ -17,7 +17,7 @@ export const siteConfig = {
   role: "Software Engineer",
   tagline: "I build clean, reliable software for the web.",
   bio: "Software engineer focused on TypeScript, distributed systems, and thoughtful developer tooling. I like small, sharp abstractions and shipping things that last.",
-  url: "https://example.com",
+  url: "https://ashwanisingh.com",
   email: "itsashksingh10@gmail.com",
   nav: [
     { title: "Home", href: "/" },
@@ -25,9 +25,9 @@ export const siteConfig = {
     { title: "Projects", href: "/projects" },
   ] satisfies NavItem[],
   socials: [
-    { title: "GitHub", href: "https://github.com/", icon: "github" },
-    { title: "LinkedIn", href: "https://linkedin.com/", icon: "linkedin" },
-    { title: "X", href: "https://x.com/", icon: "twitter" },
+    { title: "GitHub", href: "https://github.com/Ashwani1621", icon: "github" },
+    { title: "LinkedIn", href: "https://linkedin.com/in/ashwani69", icon: "linkedin" },
+    { title: "X", href: "https://x.com/ashwanistwt", icon: "twitter" },
     { title: "Email", href: "mailto:itsashksingh10@gmail.com", icon: "mail" },
   ] satisfies SocialLink[],
 } as const;

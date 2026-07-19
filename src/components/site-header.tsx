@@ -1,7 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+
+import icon from "@/app/icon.png";
 
 import { siteConfig } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -17,12 +20,13 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b bg-background/80 backdrop-blur">
       <Container className="flex h-14 items-center justify-between gap-4">
-        <Link
-          href="/"
-          className="font-mono text-sm font-semibold tracking-tight"
-        >
-          {siteConfig.handle}
-          <span className="text-muted-foreground">.dev</span>
+        <Link href="/" aria-label="Home">
+          <Image
+            src={icon}
+            alt={siteConfig.name}
+            className="size-8 rounded-lg"
+            priority
+          />
         </Link>
 
         <nav className="flex items-center gap-1">
