@@ -12,13 +12,10 @@ export type SocialLink = {
 
 export const siteConfig = {
   name: "Ashwani Singh",
-  // Short handle used in the navbar / logo
-  handle: "ashwani",
   role: "Software Engineer",
   tagline: "I build clean, reliable software for the web.",
   bio: "Software engineer focused on TypeScript, distributed systems, and thoughtful developer tooling. I like small, sharp abstractions and shipping things that last.",
   url: "https://ashwanisingh.com",
-  email: "itsashksingh10@gmail.com",
   nav: [
     { title: "Home", href: "/" },
     { title: "Blogs", href: "/blogs" },

@@ -14,10 +14,7 @@ export default function HomePage() {
     <div className="space-y-16">
       {/* Hero */}
       <section>
-        <p className="font-mono text-sm text-muted-foreground">
-          {siteConfig.role}
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
           {siteConfig.name}
         </h1>
         <p className="mt-4 text-lg text-muted-foreground">
